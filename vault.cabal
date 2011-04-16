@@ -1,0 +1,49 @@
+Name:                vault
+Version:             0.1.0
+Description:         vault
+License:             BSD3
+License-file:        LICENSE
+Copyright:           Vincent Hanquez <vincent@snarc.org>
+Author:              Vincent Hanquez <vincent@snarc.org>
+Maintainer:          Vincent Hanquez <vincent@snarc.org>
+Synopsis:            vaulture
+Build-Type:          Simple
+Category:            Network
+stability:           experimental
+Cabal-Version:       >=1.6
+Homepage:            http://github.com/vincenthz/vault
+Data-files:          README.md
+
+Flag test
+  Description:       Build tests
+  Default:           False
+
+executable         vault
+  Main-is:         CLI.hs
+  Build-Depends:   base >= 3 && < 5
+                 , bytestring
+                 , cryptocipher >= 0.2.8
+                 , cryptohash >= 0.7.0
+                 , crypto-api >= 0.5
+                 , cprng-aes >= 0.2.0 && < 0.3.0
+                 , cereal >= 0.3.0
+                 , cmdargs
+                 , text
+                 , directory
+                 , unix
+
+executable         Tests
+  Main-is:         Tests.hs
+  if flag(test)
+    Buildable:     True
+    Build-Depends: base >= 3 && < 5
+                 , QuickCheck >= 2
+                 , bytestring
+                 , cryptocipher >= 0.2.8
+                 , cryptohash >= 0.7.0
+                 , crypto-api >= 0.5
+                 , cprng-aes >= 0.2.0 && < 0.3.0
+                 , cereal >= 0.3.0
+                 , text
+  else
+    Buildable:     False
