@@ -37,8 +37,6 @@ module Vault
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
-import qualified Data.Text as T
-import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 
 import Control.Applicative ((<$>))
 import Control.Arrow (first)
@@ -48,13 +46,15 @@ import Data.Maybe (isJust)
 import Data.Word
 import Data.Bits
 
-import Crypto.Random
+import Crypto.Random.Entropy
 import Vault.Crypto
 import Vault.Path
 import Vault.Store
 
-import Data.Serialize.Put (runPut, putWord32le, putWord8, putByteString)
-import Data.Serialize.Get (runGet, getWord32le, getWord8, getByteString, skip, remaining)
+import qualified Data.ByteString.UTF8 as UTF8
+
+--import Data.Serialize.Put (runPut, putWord32le, putWord8, putByteString)
+--import Data.Serialize.Get (runGet, getWord32le, getWord8, getByteString, skip, remaining)
 
 {-| Key represent a cryptographic key for the AES 256 bit cipher -}
 newtype Key = Key { unwrapKey :: ByteString } deriving (Eq)
@@ -68,8 +68,8 @@ newtype Secret = Secret { unwrapSecret :: ByteString } deriving (Eq)
 {-| Passphrase is used to unlock stored Key -}
 newtype Passphrase = Passphrase { unwrapPP :: ByteString } deriving (Eq)
 
-encodeString = encodeUtf8 . T.pack
-decodeString = T.unpack . decodeUtf8
+encodeString = UTF8.fromString
+decodeString = UTF8.toString
 
 makeSecret :: String -> Secret
 makeSecret = Secret . encodeString

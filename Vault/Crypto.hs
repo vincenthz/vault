@@ -5,68 +5,48 @@
 -- Stability   : experimental
 -- Portability : unknown
 --
+{-# LANGUAGE OverloadedStrings #-}
 module Vault.Crypto
-	( encrypt
-	, decrypt
-	, enPassphrase
-	, dePassphrase
-	, hash
-	) where
+    ( encrypt
+    , decrypt
+    , pbkdf
+    ) where
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as L
+import qualified Data.ByteString.Lazy.Internal as L
 
-import qualified Crypto.Cipher.AES as AES
-import Crypto.Hash.SHA512 (hash)
+import Crypto.Hash (SHA512(..))
+import qualified Crypto.Cipher.ChaCha as ChaCha
+import qualified Crypto.KDF.PBKDF2 as PBKDF2
 
-import Text.Printf
 import Data.Bits
 
--- | EssivCBC is a CBC mode where the IV vectors are determined by a ESSIV like algorithm
-encrypt key fIV b
-	| B.length b `mod` 16 /= 0 = error ("encrypt length error: " ++ show (B.length b))
-	| otherwise = B.concat $ loop fIV $ zip [0..] $ reverse $ chunks 16 b
-	where
-		loop _  []     = []
-		loop iv (x:xs) =
-			let e = encryptOne iv x in
-			e : loop e xs
+initSt key nonce = ChaCha.initialize 20 key nonce
 
-		encryptOne iv (n, b) = AES.encrypt k x
-			where
-				x      = bxor b $ bxor eiv iv
-				eiv    = hash (bxor key bnRepr)
-				bnRepr = B.replicate 32 (fromIntegral $ n + 1)
+encrypt key nonce input =
+    let st = initSt key nonce
+     in runLoop st input
+  where runLoop st lbs = L.chunk nonce (loop st lbs)
+        loop state lbs
+            | L.null lbs = L.empty
+            | otherwise   =
+                let (l1,l2) = L.splitAt 4096 lbs 
+                    (encrypted, nstate) = ChaCha.combine state (L.toStrict l1)
+                 in L.chunk encrypted (loop nstate l2)
 
-		(Right k) = AES.initKey256 key
+decrypt key = runDecrypt key
+  where runDecrypt key lbs =
+            let (nonce, lbs') = L.splitAt 8 lbs
+                state = initSt key (L.toStrict nonce)
+             in loop state lbs'
+        loop state lbs
+            | L.null lbs = L.empty
+            | otherwise  =
+                let (l1,l2) = L.splitAt 4096 lbs
+                    (decrypted, nstate) = ChaCha.combine state (L.toStrict l1)
+                 in L.chunk decrypted (loop nstate l2)
 
-decrypt key fIV b
-	| B.length b `mod` 16 /= 0 = error ("decrypt length error: " ++ show (B.length b))
-	| otherwise = B.concat $ reverse $ loop fIV $ zip [0..] $ chunks 16 b
-	where
-		loop _  []     = []
-		loop iv ((n,b):xs) =
-			let e = decryptOne iv (n,b) in
-			e : loop b xs
-
-		decryptOne iv (n, b) = bxor eiv $ bxor iv $ AES.decrypt k b
-			where
-				eiv    = hash (bxor key bnRepr)
-				bnRepr = B.replicate 32 (fromIntegral $ n + 1)
-
-		(Right k) = AES.initKey256 key
-
-enPassphrase pp = AES.encryptCBC key (B.replicate 16 0)
-	where (Right key) = AES.initKey256 $ hash pp
-
-dePassphrase pp = AES.encryptCBC key (B.replicate 16 0)
-	where (Right key) = AES.initKey256 $ hash pp
-
-bxor a b = B.pack $ B.zipWith xor a b
-
-chunks :: Int -> ByteString -> [ByteString]
-chunks sz b
-	| B.length b < sz  = error ("chunkify partial packet: " ++ show (B.length b))
-	| B.length b == sz = [b]
-	| otherwise        = b1 : chunks sz b2
-		where (b1, b2) = B.splitAt sz b
+pbkdf password =
+    PBKDF2.generate (PBKDF2.prfHMAC SHA512) (PBKDF2.Parameters password "salt-is-good" 6000 32)
